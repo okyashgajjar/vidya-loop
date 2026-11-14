@@ -1,0 +1,3 @@
+pattern: 'machine learning|artificial intelligence|\bai\b|\bml\b'
+rules:
+  - "For AI and machine learning comparisons, do not equate AI with artificial general intelligence or claim machine learning only handles prediction. Explain AI as the broader field and machine learning as learning patterns from data."

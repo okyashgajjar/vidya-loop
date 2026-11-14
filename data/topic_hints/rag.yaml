@@ -1,0 +1,6 @@
+pattern: '\brag\b|retrieval[- ]augmented'
+rules:
+  - "For Retrieval-Augmented Generation (RAG), cover chunking, embeddings, vector storage, top-k retrieval, adding retrieved context to the prompt, and answer generation. Do not claim that RAG retrains model weights for each question."
+  - "Introduce RAG as 'Retrieval-augmented generation (RAG) is a method that...' Never use the acronym before defining it."
+  - "Define these terms in the process section when they appear: 'A chunk is a small piece of a document.' 'Chunking means splitting a long document into smaller pieces.' 'Retrieval means finding useful stored information.' 'An embedding is a list of numbers that represents meaning.' 'A vector store is a database that groups text by meaning.'"
+  - "Never mention a vector store or vector database before defining it. Write the definition in the same sentence as the first use."

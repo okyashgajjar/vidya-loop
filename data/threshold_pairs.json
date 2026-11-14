@@ -1,0 +1,26 @@
+{
+  "related": [
+    ["Introduction to RAG", "Retrieval augmented generation basics"],
+    ["What are embeddings?", "How text embeddings represent meaning"],
+    ["Vector databases", "Vector stores for semantic retrieval"],
+    ["How does top-k retrieval work?", "Selecting the most relevant search results"],
+    ["Prompt augmentation in RAG", "Adding retrieved context to a language model prompt"],
+    ["Chunking long documents", "Splitting documents into searchable passages"],
+    ["Machine learning model training", "Teaching a model from example data"],
+    ["Neural networks", "Layers of connected artificial neurons"],
+    ["Classification in machine learning", "Predicting a category from input features"],
+    ["RAG grounding and hallucinations", "Using retrieved facts to reduce made-up answers"]
+  ],
+  "unrelated": [
+    ["Introduction to RAG", "How monsoon clouds form"],
+    ["What are embeddings?", "Indian parliamentary elections"],
+    ["Vector databases", "Cooking rice in a pressure cooker"],
+    ["Top-k retrieval", "The history of classical music"],
+    ["Prompt augmentation", "Human digestion and nutrition"],
+    ["Chunking documents", "Cricket fielding positions"],
+    ["Machine learning model training", "How tides change during a lunar month"],
+    ["Neural networks", "Basic bicycle maintenance"],
+    ["Classification algorithms", "The life cycle of a flowering plant"],
+    ["Hallucinations in AI", "How to prepare masala chai"]
+  ]
+}

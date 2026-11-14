@@ -1,0 +1,5 @@
+pattern: '\btensors?\b'
+rules:
+  - "Define a tensor precisely: 'A tensor is an array of numbers with any number of dimensions.' A scalar has zero dimensions, a vector has one, and a matrix has two."
+  - "Do not call a tensor a 'general data structure' or a 'general idea'. State how many dimensions it can have."
+  - "The build-up from scalar to vector to matrix to tensor is the ordered process section. Write it as steps 1., 2., 3. on separate lines."

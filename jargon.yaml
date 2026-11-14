@@ -1,0 +1,51 @@
+# Technical terms that must be explained immediately upon their first occurrence in the lesson
+terms:
+  - term: "retrieval-augmented generation"
+    aliases: ["retrieval augmented generation"]
+    description: "A method that retrieves useful outside information and gives it to a model before it writes an answer."
+  - term: "vector database"
+    aliases: ["vector db", "vector store"]
+    description: "A database that stores information by meaning instead of exact keywords."
+  - term: "embedding"
+    aliases: ["embeddings", "vector embedding"]
+    description: "Converting words or sentences into a list of numbers that capture meaning."
+  - term: "retrieval"
+    aliases: ["retrieve", "retriever"]
+    description: "Searching and fetching the most relevant notes or documents from storage."
+  - term: "hallucination"
+    aliases: ["hallucinations", "hallucinate"]
+    description: "When an AI makes up confident-sounding answers that are actually incorrect."
+  - term: "chunking"
+    aliases: ["chunks", "chunk"]
+    description: "Breaking down big documents into smaller, easy-to-read pieces."
+  - term: "context window"
+    aliases: ["context length"]
+    description: "The maximum amount of text an AI model can read and process at one time."
+  - term: "prompt augmentation"
+    aliases: ["augmented prompt", "context injection"]
+    description: "Adding retrieved facts directly into the user's question before sending it to the AI."
+  - term: "large language model"
+    aliases: ["llm", "foundation model"]
+    description: "An AI system trained on massive text data to generate human-like answers."
+  - term: "model weights"
+    aliases: ["weights"]
+    description: "Stored numeric settings that a trained model uses to produce outputs."
+
+# Markers indicating an explanation is being provided immediately adjacent to the term.
+# A bare colon, em-dash, or hyphen is NOT sufficient — the marker must be a
+# real explanation cue such as "means", "is a", "defined as", or a parenthetical.
+explanation_markers:
+  - "means"
+  - "meaning"
+  - "which means"
+  - "is like"
+  - "think of this as"
+  - "think of it as"
+  - "defined as"
+  - "referred to as"
+  - "simply put"
+  - "in simple words"
+  - "that is"
+  - "i.e."
+  - "("
+

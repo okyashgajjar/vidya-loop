@@ -1,0 +1,45 @@
+# Secrets — never commit real credentials
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local runtime data
+cache/
+logs/
+profiles/
+memory.json
+*.log
+*.jsonl
+
+# Local databases and uploaded documents
+*.sqlite
+*.sqlite3
+*.db
+uploads/
+documents/
+
+# Agent tooling (fetched skills, not project source)
+.agents/
+skills-lock.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local environment overrides
+.streamlit/secrets.toml

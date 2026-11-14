@@ -1,0 +1,73 @@
+version: "1.0"
+target_audience:
+  description: "12th-grade graduate from India, limited English vocabulary, non-English-medium background, aspiring AI career"
+  grade_level_max: 8.5
+  reading_ease_min: 60.0
+  sentence_len_max: 25
+  sentence_len_avg_max: 16
+  max_rare_word_ratio: 0.30
+
+native_checks:
+  - id: NATIVE_READABILITY
+    name: "Flesch Reading Ease & Grade Level"
+    description: "Flesch Reading Ease score >= 60.0 and Flesch-Kincaid Grade Level <= 8.5."
+    min_reading_ease: 60.0
+    max_grade_level: 8.5
+
+  - id: NATIVE_SENTENCE_LEN
+    name: "Sentence Length Guardrail"
+    description: "Average sentence length <= 16 words; 95% of sentences <= 22 words; no individual sentence > 25 words."
+    max_avg_length: 16
+    hard_max_length: 25
+
+  - id: NATIVE_REQUIRED_SECTIONS
+    name: "Mandatory Pedagogical Sections"
+    description: "Lesson must contain all core sections from the dynamically generated plan."
+    # required_headers are now passed dynamically from plan.core_sections
+
+  - id: NATIVE_ORDERED_STEPS
+    name: "Ordered Process Explanation"
+    description: "The planned process section must explain at least the configured number of ordered steps."
+    section_index: 2
+    minimum_steps: 3
+
+  - id: NATIVE_EXAMPLE_HAS_NUMBERS
+    name: "Numeric Worked Example"
+    description: "The planned example section must contain at least one concrete number."
+    section_index: -1
+    minimum_digits: 1
+
+  - id: NATIVE_KNOWN_FALSE_CLAIMS
+    name: "Known False Claim Guard"
+    description: "Reject the configured known false claims even before invoking the judge."
+    forbidden_claims:
+      - "RAG retrains the model's weights every time a question is asked"
+
+  - id: NATIVE_JARGON_DEFINED
+    name: "First-Use Jargon Definition"
+    description: "Technical terms from jargon.yaml must be explained immediately upon their first occurrence."
+
+  - id: NATIVE_CITATION_GROUNDING
+    name: "Source URL Integrity"
+    description: "Any external URL cited in the lesson text must strictly exist in the retrieved SourcePack."
+
+judge_checks:
+  - id: JUDGE_ACCURACY_GROUNDING
+    name: "Factual Accuracy & Grounding"
+    description: "All core claims and descriptions must be factually accurate and grounded in verified AI concepts. No hallucinations."
+
+  - id: JUDGE_AUDIENCE_FIT
+    name: "Beginner Tone & Cultural Context"
+    description: "Language is clear, direct, and free from high-register academic vocabulary. Uses relatable culturally relevant analogies."
+
+  - id: JUDGE_TEACH_BY_EXAMPLE
+    name: "Concrete Step-by-Step Example"
+    description: "Must include a realistic walkthrough showing a practical scenario with input, process, and output."
+
+  - id: JUDGE_KEY_POINTS_COVERAGE
+    name: "Core Concepts Coverage"
+    description: "Must clearly cover all must_cover_points from the lesson plan."
+
+  - id: JUDGE_COHERENT_FLOW
+    name: "Pedagogical Coherence & Flow"
+    description: "Concepts build naturally from introduction to explanation to practical takeaway without confusing jumps."

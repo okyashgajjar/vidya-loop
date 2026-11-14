@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    profiles: ["full"]
+    environment:
+      POSTGRES_DB: learning_companion
+      POSTGRES_USER: learning_companion
+      POSTGRES_PASSWORD: local_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - learning_companion_pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U learning_companion -d learning_companion"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  learning_companion_pgdata:
