@@ -1,199 +1,172 @@
-# Self-Evaluating Lesson Generator
+# Vidya Loop
 
 **Most AI lesson generators ship the first draft. This one refuses to.**
 
-A fail-closed LangGraph pipeline that plans, drafts, tests, repairs, and only then ships a beginner lesson. Every lesson passes **15 binary quality gates** before a learner ever sees it. If a gate cannot decide, the run stops instead of guessing.
-
-The default learner is a 12th-grade graduate from India with limited English and a non-English-medium background. The pipeline is topic-agnostic: RAG, linear algebra, and UPI all use the same gates.
+Vidya Loop writes a beginner lesson, checks it against **15 pass/fail rules**, fixes only what failed, and ships it only when every rule passes. If a checker cannot prove its answer, the run stops instead of guessing.
 
 ---
 
-## Overview
+## Details
 
-**What does the system do?** Search, plan, draft, evaluate, repair. Every lesson clears two gates before it ships.
+### What it is
 
-```mermaid
-flowchart TD
-    UI[Streamlit UI or CLI] --> CTX[Context<br/>profile memory + documents]
-    CTX --> SRC[Search<br/>3 caches → Tavily → DDGS → stub]
-    SRC --> PLAN[Plan<br/>outline + must-cover points]
-    PLAN --> DRAFT[Draft lesson]
-    DRAFT --> NATIVE{Native gate<br/>10 deterministic checks}
-    NATIVE -->|pass| JUDGE{Judge<br/>5 evidence checks}
-    NATIVE -->|fail| REVISE[Targeted revision<br/>failed sections only]
-    JUDGE -->|pass| SHIP[Ship lesson + scorecard]
-    JUDGE -->|fail| REVISE
-    REVISE --> NATIVE
-    JUDGE -->|no verdict| STOP[Stop fail-closed]
-```
+Vidya Loop is a self-evaluating lesson generator. It searches for real sources, plans the lesson, writes a draft, tests it, repairs the failed parts, and only then shows it to a learner.
 
-`source_pack` and `plan` are frozen before the first draft. A retry rewrites only the failed sections, against the same evidence. The plan cannot quietly change to make a check pass.
+The default learner is a 12th-grade graduate from India with limited English and a non-English-medium background. The pipeline is topic-agnostic: RAG, linear algebra, and UPI all use the same rules.
 
-Full node flow and state boundaries: [docs/architecture.md](docs/architecture.md).
+### The problem
 
----
-
-## The problem
-
-A single LLM call produces text that looks finished but fails silently:
+One LLM call produces text that looks finished but fails silently:
 
 - It drifts above the learner's reading level.
-- It invents facts that the sources never said.
+- It invents facts the sources never said.
 - It drops required sections during a revision.
 - It grades itself and passes.
 - It hides failures behind a friendly paragraph.
 
 This pipeline treats all five as stop-the-line defects.
 
----
+### What you get
 
-## Impact at a glance
+These are guarantees built into the pipeline, plus arithmetic bounds. They are not measured production telemetry.
 
-These are architectural guarantees and arithmetic bounds from the pipeline, not marketing telemetry.
-
-| Impact | Mechanism | Number |
+| Guarantee | How it works | Number |
 | --- | --- | --- |
-| Paid judge calls avoided on formatting defects | Native gate runs first; a native failure skips the judge entirely | **100%** of native-rejected drafts |
-| Zero-cost quality checks | 10 of 15 gates are deterministic Python, no tokens | **$0** per native check |
-| Revision cost cut | Only failed sections are rewritten; math assumes 4 planned sections | **up to 75%** less rewritten text when 1 of 4 sections fails |
-| Runaway spend eliminated | `MAX_ATTEMPTS` is a hard cap on drafts and revisions | **3 attempts total: 1 draft + 2 revisions max** |
-| Judge evidence cannot be faked | Quotes must be verbatim substrings of the lesson or sources; one repair, then fail closed | **100%** of non-verbatim evidence rejected |
-| Repeat planning is free | Deterministic cache keyed on topic, sources, profile, prompt, and hints | **0 model calls** on a warm plan |
-| Database self-heals | Disabled pool is re-probed instead of cached until restart | **every 30s** |
-| Search survives outages | 3 cache layers, 2 live backends, then an offline stub that cannot pass grounding | **6 fallback stages** |
-| Prompt stays focused | Profile-scoped memory injects only the most relevant context | **≤10 glossary terms + ≤3 failure notes** |
-| Regressions caught before merge | Mocked unit and graph tests, no live API required | **66 tests, 0 network calls** |
+| Formatting mistakes never reach the paid reviewer | The 10 free checks run first. A failure skips the AI reviewer | **100%** of drafts rejected by free checks |
+| Most quality checks cost nothing | 10 of the 15 checks are plain Python | **$0** per free check |
+| Revisions stay small | Only failed sections are rewritten. Assumes 4 planned sections | **up to 75%** less rewritten text when 1 of 4 sections fails |
+| Spending cannot run away | `MAX_ATTEMPTS` caps drafts and fixes | **3 attempts total: 1 draft + 2 fixes** |
+| The reviewer cannot make up evidence | Every quote must appear word-for-word in the lesson or a source | **100%** of non-matching quotes rejected |
+| Repeat planning is free | A cache keyed on topic, sources, profile, prompt, and hints | **0 model calls** on a warm plan |
+| The database recovers by itself | A disabled connection pool is re-tested instead of staying dead until restart | **every 30s** |
+| Search survives outages | 3 cache layers, 2 live search backends, then an offline stub | **6 fallback stages** |
+| Prompts stay small | Memory is filtered by relevance and capped | **≤10 glossary terms + ≤3 failure notes** |
+| Regressions are caught before merge | Unit and graph tests mock every model call | **66 tests, 0 network calls** |
 
 ---
 
-## Technology choices: why each one earned its place
+## Architecture
 
-| Technology | Role | Why we used it | Production impact |
+### End-to-end flow
+
+**What does the system do?** Search, plan, draft, evaluate, repair. Every lesson clears two levels of checks before it ships.
+
+```mermaid
+flowchart TD
+    UI[Streamlit UI or CLI] --> CTX[Load learner profile<br/>and saved notes]
+    CTX --> SRC[Search for sources]
+    SRC --> PLAN[Plan the lesson<br/>outline + key points]
+    PLAN --> DRAFT[Draft the lesson]
+    DRAFT --> NATIVE{Free rule checks<br/>10 checks}
+    NATIVE -->|pass| JUDGE{AI reviewer<br/>5 checks + quotes}
+    NATIVE -->|fail| REVISE[Fix only<br/>failed sections]
+    JUDGE -->|pass| SHIP[Ship lesson<br/>+ scorecard]
+    JUDGE -->|fail| REVISE
+    REVISE --> NATIVE
+    JUDGE -->|no verdict| STOP[Stop<br/>do not ship]
+```
+
+In plain English:
+
+1. **Find real sources.** The app searches its three cache layers, then Tavily, then DuckDuckGo, then an offline stub.
+2. **Plan before writing.** The plan lists the sections and the key points the lesson must cover.
+3. **Draft the lesson.** A model writes the first version.
+4. **Run the free checks.** Ten Python checks catch mechanical problems with no AI call and no cost.
+5. **Run the AI reviewer.** Only if the free checks pass, a second model judges meaning, accuracy, and audience fit.
+6. **Fix only what failed.** The failed sections are rewritten, not the whole lesson.
+7. **Ship or stop.** Three attempts maximum, then the run fails visibly.
+
+The plan and the sources are frozen before drafting. A retry cannot move the goalposts or swap evidence to make a check pass.
+
+Full node flow and state boundaries: [docs/architecture.md](docs/architecture.md).
+
+### The 15 checks
+
+**What are the pass/fail checks?** Fifteen binary checks, split by cost.
+
+Level 1 is free and runs first. Level 2 costs one AI call and runs only after level 1 passes. Every level-2 verdict must include exact quotes as evidence.
+
+| Level | Check | Passes when | Cost |
 | --- | --- | --- | --- |
-| **LangGraph** | Explicit state machine for plan, draft, evaluate, revise, stop | Retry limits and failure paths are first-class edges, not `while` loops buried in application code | Stop paths are reviewable; a failed run cannot loop forever |
-| **Pydantic v2** | Typed contracts for profiles, plans, drafts, judge results | Malformed model output fails at the boundary instead of leaking into business logic | Validation errors are caught before a single gate runs |
-| **OpenAI-compatible provider layer** | One interface for NVIDIA, OpenRouter, and compatible endpoints | Model IDs live in `.env`, never in code; swapping providers is configuration | No vendor lock-in; judge and draft can use different models |
-| **textstat** | Flesch Reading Ease, grade level, rare-word ratio | Readability is measured, not vibes | Catches lessons written above the learner's grade level |
-| **Tavily + DuckDuckGo** | Grounded source retrieval | Two independent backends before an offline stub | A dead API degrades; it does not silently invent sources |
-| **Streamlit** | Operator UI | Profile, session, scorecard, rejection log, and audit events in one place | Reviewers can inspect *why* a lesson passed or failed |
-| **Postgres + pgvector** | Relational and semantic persistence | Similarity search for memory and uploaded documents | One query path for structured state and vector recall |
-| **psycopg_pool** | Connection pooling | Avoids a new connection per request | Predictable latency under concurrent UI sessions |
-| **LangSmith** | Optional tracing | Full prompt and response visibility during debugging | Failures are diagnosable without reproducing them |
-| **PyYAML** | Rubric, jargon, and topic hints | Quality policy is data, not code | A reviewer can audit the rules without reading Python |
-| **pypdf** | Document ingestion | Learners can ground lessons in their own PDFs | Real course material becomes source context |
-| **JSONL audit** | Per-run event log | Append-only, survives Postgres outages | Every model call is reconstructable after the fact |
-| **pytest** | Test suite | Model calls are mocked at the boundary | CI runs in seconds, with no API keys |
-
----
-
-## The 15-gate quality system
-
-**What are the pass/fail checks?** Fifteen binary gates, split by cost.
-
-Tier 1 runs first and costs no tokens. A native failure skips the judge. Tier 2 runs only after native passes, and every verdict must carry verbatim evidence.
-
-| Tier | Gate | Pass condition | Cost |
-| --- | --- | --- | --- |
-| 1 | `NATIVE_READABILITY` | Flesch Reading Ease ≥ 60, grade level ≤ 8.5 | Free |
-| 1 | `NATIVE_SENTENCE_LEN` | Average ≤ 16 words, no sentence > 25 | Free |
-| 1 | `NATIVE_REQUIRED_SECTIONS` | Every planned `##` heading exists, in order | Free |
-| 1 | `NATIVE_ORDERED_STEPS` | Process section has ≥ 3 numbered or ordinal steps | Free |
-| 1 | `NATIVE_EXAMPLE_HAS_NUMBERS` | Practical example contains a concrete number | Free |
-| 1 | `NATIVE_JARGON_DEFINED` | Each technical term is defined on first use | Free |
+| 1 | `NATIVE_READABILITY` | Flesch Reading Ease ≥ 60; grade level ≤ 8.5 (plain-English score) | Free |
+| 1 | `NATIVE_SENTENCE_LEN` | Average sentence ≤ 16 words; no sentence over 25 | Free |
+| 1 | `NATIVE_REQUIRED_SECTIONS` | Every planned section heading exists, in order | Free |
+| 1 | `NATIVE_ORDERED_STEPS` | The process section has at least 3 numbered steps | Free |
+| 1 | `NATIVE_EXAMPLE_HAS_NUMBERS` | The practical example contains a real number | Free |
+| 1 | `NATIVE_JARGON_DEFINED` | Every technical term is defined on first use | Free |
 | 1 | `NATIVE_KNOWN_FALSE_CLAIMS` | Configured false claims never appear | Free |
-| 1 | `NATIVE_CITATION_GROUNDING` | Cited URLs exist in the active source pack | Free |
-| 1 | `NATIVE_SOURCE_GROUNDING` | The run is backed by real sources, not the offline stub | Free |
-| 1 | `NATIVE_RARE_WORD_RATIO` | Difficult-word ratio stays under the configured ceiling | Free |
-| 2 | `JUDGE_ACCURACY_GROUNDING` | Claims are true and do not contradict sources | 1 judge call |
-| 2 | `JUDGE_AUDIENCE_FIT` | Language matches the exact learner profile | 1 judge call |
-| 2 | `JUDGE_TEACH_BY_EXAMPLE` | One traceable worked example exists | 1 judge call |
-| 2 | `JUDGE_KEY_POINTS_COVERAGE` | Every planned must-cover point is present by meaning | 1 judge call |
-| 2 | `JUDGE_COHERENT_FLOW` | Introduction → explanation → takeaway | 1 judge call |
+| 1 | `NATIVE_CITATION_GROUNDING` | Every cited URL exists in the active source pack | Free |
+| 1 | `NATIVE_SOURCE_GROUNDING` | The run used real sources, not the offline stub | Free |
+| 1 | `NATIVE_RARE_WORD_RATIO` | Difficult-word ratio stays under the configured limit | Free |
+| 2 | `JUDGE_ACCURACY_GROUNDING` | Claims are true and do not contradict sources | 1 AI call |
+| 2 | `JUDGE_AUDIENCE_FIT` | Language matches the exact learner profile | 1 AI call |
+| 2 | `JUDGE_TEACH_BY_EXAMPLE` | One traceable worked example exists | 1 AI call |
+| 2 | `JUDGE_KEY_POINTS_COVERAGE` | Every planned key point is present by meaning | 1 AI call |
+| 2 | `JUDGE_COHERENT_FLOW` | Introduction → explanation → takeaway | 1 AI call |
 
-All five judge checks arrive in a single structured response, so a run that reaches tier 2 costs one judge call, not five.
+All five level-2 checks come back in one structured response, so reaching level 2 costs one AI call, not five.
 
-### Fail-closed by design
+### Why it stops instead of guessing
 
-- Every `evidence_quote` must be a verbatim substring of the lesson, whitespace-normalized.
-- Every accuracy failure must quote a verbatim source line.
-- One repair call is allowed. If evidence still does not match, the result is a **judge error**, not a lesson failure, and the run stops.
-- A missing judge check is a conservative failure marked as an evaluator error. The router never treats it as lesson feedback.
+The pipeline is **fail-closed**: when it cannot prove a lesson is good, it does not ship.
 
-A judge that cannot prove its verdict does not get a vote.
+- Every quoted piece of evidence must appear word-for-word in the lesson or a source.
+- Every accuracy failure must quote a real source line.
+- One repair call is allowed. If the quote still does not match, the result is a **judge error**, not a lesson failure, and the run stops.
+- A missing review check is treated as an evaluator error. The retry logic never mistakes it for lesson feedback.
 
----
+A reviewer that cannot prove its verdict does not get a vote.
 
-## One failing run and the rejection log
+### What happens when a lesson fails
 
-**How does it regenerate, and what is logged?** This is the common case: the draft is structurally sound but a term is undefined. The run never reaches the judge, and the retry rewrites only what failed.
+**How does it regenerate, and what is logged?** This is the common case: the draft is structurally fine but one term is undefined. The run never reaches the AI reviewer, and the retry rewrites only what failed.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant G as Graph
-    participant D as Generate
-    participant N as Native gate
-    participant M as Memory + log
-    G->>D: draft, attempt 1
-    D-->>N: lesson
-    N-->>G: FAIL NATIVE_JARGON_DEFINED
-    G->>M: record check, reason, source excerpts
-    M-->>G: lessons + sections to revise
-    G->>D: revise failed sections only
-    D-->>N: patched draft, attempt 2
-    N-->>G: 10/10 native checks pass
-    G->>G: send to judge
+    participant P as Pipeline
+    participant W as Writer
+    participant R as Rule checks
+    participant L as Log + memory
+    P->>W: write draft 1
+    W-->>R: lesson
+    R-->>P: fail: undefined term
+    P->>L: save check, reason, sources
+    L-->>P: lessons + sections to fix
+    P->>W: rewrite only failed sections
+    W-->>R: draft 2
+    R-->>P: 10/10 rules pass
+    P->>P: send to AI reviewer
 ```
 
-Every retry writes one `rejection_log` entry before the next draft starts:
+The pipeline keeps a **rejection log**: one structured entry for every retry, written before the next draft starts.
 
-| Field | What it holds | Why a reviewer cares |
+| Field | What it holds | Why it matters |
 | --- | --- | --- |
-| `stage_failed` | `native` or `judge` | Shows which tier caught the defect |
-| `failed_check_ids` | Exact gate IDs | Reproducible, not a prose complaint |
-| `reasons` | Gate messages and violations | Explains the failure without re-running it |
+| `stage_failed` | `native` or `judge` | Shows which level caught the defect |
+| `failed_check_ids` | Exact check IDs | Reproducible, not a prose complaint |
+| `reasons` | Check messages and violations | Explains the failure without re-running it |
 | `revised_sections` | Section headings sent back | Proves the retry was targeted, not a full rewrite |
 | `source_evidence` | Up to three source excerpts | Shows what the model was allowed to claim |
-| `revision_diff` | Unified diff of the draft before and after the retry | Proves what actually changed between attempts |
+| `revision_diff` | Diff of the draft before and after the retry | Proves what actually changed |
 
-The same entry feeds short-term memory, so the next attempt starts from what failed instead of rediscovering it. The Streamlit rejection tab renders these entries beside the scorecard, so a reviewer can read the failure without opening a log file.
+The same entry feeds short-term memory, so the next attempt starts from what failed. The Streamlit rejection tab shows these entries beside the scorecard, so a reviewer can read the failure without opening a log file.
 
----
+### Memory: how it improves over time
 
-## Features and why they exist
-
-| Feature | Why it matters |
-| --- | --- |
-| **Two-tier evaluation** | Cheap checks absorb mechanical defects; the expensive judge only reviews meaning |
-| **Targeted revision** | Rewrites only failed sections, so a passing section cannot regress |
-| **Bounded retries** | `MAX_ATTEMPTS=3` caps latency and spend; no infinite self-repair loop |
-| **Frozen plan and sources** | A retry cannot move the goalposts or swap evidence |
-| **Topic hints** | Domain facts live in `data/topic_hints/`, loaded only when the topic matches |
-| **Profile-scoped memory** | Style lessons apply across topics; content lessons stay topic-specific |
-| **Profile migration** | Old default cultural context upgrades on load; custom values are never touched |
-| **Numeric worked examples** | Beginners need one concrete number, not another abstract definition |
-| **Document knowledge library** | TXT, Markdown, HTML, and PDF become searchable source context |
-| **Rejection log with diffs** | Every retry records failed check IDs, reasons, source excerpts, and a unified diff |
-| **Audit trail** | Every provider call logs stage, model, attempt, latency, tokens, finish reason, and error class |
-| **Offline fallback** | Search and Postgres can fail; the pipeline reports it and never ships ungrounded content |
-
----
-
-## Memory: how it learns across runs
-
-**How does it learn across runs?** Memory is not a chat history. It is a small, scoped store: read before drafting, updated when a gate fails, and promoted only after a human approves.
+**How does it learn across runs?** Memory is not a chat history. It is a small, scoped store: read before drafting, updated when a check fails, and promoted only after a human approves.
 
 ```mermaid
 flowchart LR
-    RUN[Lesson run] --> CTX[Load scoped memory]
-    CTX --> GEN[Draft + revise]
-    GEN --> GATE{Gate verdict}
-    GATE -->|fail| FAIL[Record failed checks]
-    FAIL --> SCOPE{Style or content?}
-    SCOPE -->|style| PROF[Profile-wide lesson]
-    SCOPE -->|content| TOPIC[Topic-scoped lesson]
-    GATE -->|pass + thumbs up| GLOSS[Extract glossary terms]
-    PROF --> STORE[(Postgres + pgvector<br/>or local JSON)]
+    RUN[Lesson run] --> CTX[Load saved memory]
+    CTX --> GEN[Write and fix]
+    GEN --> GATE{Did it pass?}
+    GATE -->|no| FAIL[Save what failed]
+    FAIL --> SCOPE{Style or topic?}
+    SCOPE -->|style| PROF[Lesson for every topic]
+    SCOPE -->|topic| TOPIC[Lesson for this topic only]
+    GATE -->|yes + thumbs up| GLOSS[Save glossary terms]
+    PROF --> STORE[(Postgres or local JSON)]
     TOPIC --> STORE
     GLOSS --> STORE
     STORE --> CTX
@@ -201,41 +174,171 @@ flowchart LR
 
 Three rules keep memory from becoming noise:
 
-1. **Style failures go profile-wide; content failures stay topic-scoped.** A readability failure on RAG teaches the next lesson on UPI. A wrong UPI fact does not contaminate a tensor lesson.
-2. **Retrieval is thresholded, not exhaustive.** Related memory is injected only above a cosine similarity of `0.60`, capped at 10 glossary terms and 3 failure lessons, so the prompt stays focused as history grows.
-3. **Only successful, human-approved lessons donate glossary terms.** A thumbs-up promotes the lesson and up to two glossary terms; a thumbs-down records a short reason and teaches nothing.
+1. **Style failures go everywhere; content failures stay put.** A readability failure on RAG teaches the next lesson on UPI. A wrong UPI fact does not contaminate a tensor lesson.
+2. **Only relevant memory is loaded.** Memory is injected only above a meaning-similarity score of `0.60`, capped at 10 glossary terms and 3 failure notes.
+3. **Only approved lessons donate glossary terms.** A thumbs-up promotes the lesson and up to two glossary terms. A thumbs-down records a short reason and teaches nothing.
 
-The loop is deliberately asymmetric: a failure is recorded immediately and used on the next attempt, while a success is only promoted after human approval. Bad lessons cannot teach the system; good ones can.
+Failures teach immediately; successes must be approved. Bad lessons cannot teach the system; good ones can.
 
----
+### Design choices and trade-offs
 
-## Architecture decisions and trade-offs
-
-| Decision | Reason | Trade-off we accept |
+| Decision | Why | What we accept |
 | --- | --- | --- |
-| LangGraph over a function chain | Retry and stop paths are explicit | More setup than a linear script |
-| Native checks before the judge | Deterministic checks are free and reproducible | Mechanical checks cannot judge meaning |
-| Fixed rubric in `rubric.yaml` | Pass criteria stay stable across topics and retries | Topic-specific depth comes from the plan, not the rubric |
-| Three total attempts | One draft plus two targeted revisions | Some lessons still stop failed |
-| Optional embeddings | Memory is injected only above a calibrated cosine threshold | Similarity is approximate until calibrated |
-| Postgres/pgvector plus JSON fallback | Semantic features when available, offline-friendly otherwise | Local JSON is single-process storage |
-| Separate draft and judge models | Independent review is stronger | A single-model provider turns this into self-grading, and the UI warns |
+| LangGraph instead of a function chain | Retry and stop paths are explicit | More setup than a linear script |
+| Free checks before the AI reviewer | They are reproducible and cost nothing | They cannot judge meaning |
+| Fixed rubric in `rubric.yaml` | Pass criteria stay stable across topics and retries | Topic depth comes from the plan, not the rubric |
+| Three total attempts | One draft plus two targeted fixes | Some lessons still stop failed |
+| Optional semantic memory | Memory loads only above a calibrated threshold | Similarity is approximate until calibrated |
+| Postgres/pgvector with a JSON fallback | Semantic features when available, offline-friendly otherwise | Local JSON is single-process storage |
+| Separate draft and review models | Independent review is stronger | A single-model provider becomes self-grading, and the UI warns |
+
+### Repository layout
+
+```
+src/
+  graph.py            LangGraph wiring, retry router, scorecard
+  schemas.py          Typed state and result contracts
+  nodes/
+    search.py         Cache → Tavily → DDGS → offline stub
+    plan.py           Topic normalization, outline, topic hints
+    generate.py       Drafting, targeted revision, format repair
+    eval_native.py    10 free checks
+    eval_judge.py     5 AI checks, evidence validation, fail-closed
+  memory.py           Profile-scoped lessons and migration
+  db.py               Postgres/pgvector with self-healing fallback
+  llm.py              Provider wrapper, retries, audit hooks
+prompts/              plan.md, generate.md, judge.md
+rubric.yaml           Free-check policy
+jargon.yaml           Terms that must be defined on first use
+data/topic_hints/     Domain facts loaded only for matching topics
+scripts/              healthcheck, run_lesson, calibrate_threshold
+tests/                66 mocked tests
+docs/architecture.md  Node flow and state boundaries
+```
 
 ---
 
-## Quickstart
+## Features
 
-Requires Python 3.10+.
+| Feature | Why it matters |
+| --- | --- |
+| **Two-level checking** | Free checks absorb mechanical defects; the paid reviewer only judges meaning |
+| **Targeted fixes** | Rewrites only failed sections, so passing sections cannot regress |
+| **Frozen plan and sources** | A retry cannot change the goal or swap evidence |
+| **Bounded retries** | `MAX_ATTEMPTS=3` caps latency and spend; no infinite self-repair loop |
+| **Topic hints** | Domain facts in `data/topic_hints/` load only when the topic matches |
+| **Scoped memory** | Style lessons apply to every topic; content lessons stay topic-specific |
+| **Profile migration** | Old default cultural context upgrades on load; custom values are untouched |
+| **Numeric examples** | Beginners get one concrete number, not another abstract definition |
+| **Document library** | TXT, Markdown, HTML, and PDF files become searchable source context |
+| **Full audit trail** | Every provider call logs stage, model, attempt, latency, tokens, finish reason, and error class |
+| **Graceful fallback** | Search and Postgres can fail; the pipeline reports it and never ships unsupported content |
+
+---
+
+## Tech stack
+
+| Tool | What it does here | Why it earned its place |
+| --- | --- | --- |
+| **LangGraph** | Runs the plan, draft, evaluate, fix, and stop steps as a state machine | Retry limits and stop paths are visible edges, not hidden `while` loops |
+| **Pydantic v2** | Defines typed contracts for profiles, plans, drafts, and review results | Bad model output fails at the boundary, before any check runs |
+| **OpenAI-compatible provider layer** | One interface for NVIDIA, OpenRouter, and compatible endpoints | Model IDs live in `.env`, so switching providers is configuration |
+| **textstat** | Measures reading ease, grade level, and difficult-word ratio | Readability is measured, not guessed |
+| **Tavily + DuckDuckGo** | Finds real source material | Two independent backends before the offline stub |
+| **Streamlit** | Operator UI | Profile, session, scorecard, rejection log, and audit events in one place |
+| **Postgres + pgvector** | Stores structured state and supports similarity search | One place for relational data and related-memory lookup |
+| **psycopg_pool** | Reuses database connections | Predictable latency under concurrent UI sessions |
+| **LangSmith** | Optional tracing | Full prompt and response visibility while debugging |
+| **PyYAML** | Holds the rubric, jargon list, and topic hints | Quality policy is data a reviewer can audit without reading Python |
+| **pypdf** | Reads uploaded PDFs | Real course material can become source context |
+| **JSONL audit** | Writes one JSON object per line per run | Every model call is reconstructable after the fact |
+| **pytest** | Runs the test suite | CI runs in seconds with no API keys |
+
+---
+
+## How it compares
+
+This is an architectural comparison, not a benchmark.
+
+| Approach | Good at | Weak at | What Vidya Loop adds |
+| --- | --- | --- | --- |
+| One prompt, one model | Speed and simplicity | Cannot verify itself; drifts and invents facts | Independent checks, exact evidence, bounded repair |
+| RAG chatbot | Answering from documents | No lesson structure or reading-level guarantee | A plan, required sections, and audience-fit checks |
+| Output guardrails | Blocking banned words or formats | Cannot judge whether an explanation teaches | Free structural checks plus an AI reviewer for meaning |
+| Human review only | Nuance and judgment | Slow, expensive, inconsistent at scale | Automates the first pass; stops when it cannot prove quality |
+
+---
+
+## Installation
+
+### Prerequisites
+
+- Python 3.10 or newer
+- `pip` and `venv`
+- Git
+- An API key for an OpenAI-compatible provider
+- Optional: Docker for Postgres/pgvector
+- Optional: Tavily key for better search
+
+### Linux
 
 ```bash
-python -m venv .venv
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip
+
+git clone https://github.com/okyashgajjar/vidya-loop.git
+cd vidya-loop
+
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Set at least:
+On Fedora, install the system packages with:
+
+```bash
+sudo dnf install python3 python3-pip
+```
+
+### macOS
+
+```bash
+brew install python
+
+git clone https://github.com/okyashgajjar/vidya-loop.git
+cd vidya-loop
+
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+### Windows (PowerShell)
+
+```powershell
+git clone https://github.com/okyashgajjar/vidya-loop.git
+cd vidya-loop
+
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+If PowerShell blocks activation, allow it for the current terminal only:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+### Configure
+
+Open `.env` and set at least:
 
 ```bash
 LLM_PROVIDER=nvidia
@@ -246,7 +349,7 @@ DRAFT_MODEL=...
 JUDGE_MODEL=...
 ```
 
-`PLAN_MODEL` is optional and defaults to the draft model. Tavily and embedding credentials are optional.
+`PLAN_MODEL` is optional and defaults to the draft model. Tavily and semantic-search credentials are optional.
 
 ### Optional Postgres/pgvector
 
@@ -254,25 +357,27 @@ JUDGE_MODEL=...
 docker compose --profile full up -d postgres
 ```
 
-Set `DATABASE_URL` in `.env`. Compose applies `db/schema.sql` on a fresh volume. If Postgres is down, the app uses local JSON/JSONL and keeps working.
+Set `DATABASE_URL` in `.env`. Compose applies `db/schema.sql` on a fresh volume. If Postgres is down, the app uses local JSON/JSONL files and keeps working.
 
-### Verify every dependency
+### Check your setup
 
 ```bash
 python scripts/healthcheck.py
 ```
 
-Prints a separate PASS/FAIL for one model request, one Tavily request, one embedding request, and a Postgres write/read.
+This prints a separate PASS/FAIL for one model request, one Tavily request, one embedding request, and a Postgres write/read.
 
 ---
 
-## Run
+## Usage
+
+Start the UI:
 
 ```bash
 streamlit run app.py
 ```
 
-Or one lesson from the terminal:
+Or generate one lesson from the terminal:
 
 ```bash
 python scripts/run_lesson.py "Introduction to RAG"
@@ -280,126 +385,100 @@ python scripts/run_lesson.py "Introduction to RAG" --inject-error factual_jargon
 python scripts/run_lesson.py "Introduction to RAG" --inject-error paraphrased_falsehood
 ```
 
-`factual_jargon` proves the native gates catch a known false claim and an undefined term. `paraphrased_falsehood` proves the judge catches a reworded falsehood that substring matching cannot.
+`factual_jargon` proves the free checks catch a known false claim and an undefined term. `paraphrased_falsehood` proves the AI reviewer catches a reworded falsehood that exact-string matching cannot.
 
 ---
 
-## Configuration that matters
+## Configuration
 
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `MAX_ATTEMPTS` | `3` | Total drafts, including the first |
-| `DB_RETRY_SECONDS` | `30` | Re-probe interval after a database failure |
-| `SEMANTIC_SIMILARITY_THRESHOLD` | `0.60` | Minimum cosine similarity for memory retrieval |
-| `LLM_TOP_P` | provider default | Sampling only; unrelated to memory selection |
-| `PROMPT_SOURCE_COUNT` | see `.env.example` | Sources in the judge window before cited extras |
-| `PLAN_MODEL` / `DRAFT_MODEL` / `JUDGE_MODEL` | see `.env` | Model routing per stage |
+| `DB_RETRY_SECONDS` | `30` | How often a failed database connection is re-tested |
+| `SEMANTIC_SIMILARITY_THRESHOLD` | `0.60` | Minimum meaning-similarity score for loading memory |
+| `LLM_TOP_P` | provider default | Sampling randomness only; it does not select memory |
+| `PROMPT_SOURCE_COUNT` | see `.env.example` | Sources in the reviewer window before cited extras |
+| `PLAN_MODEL` / `DRAFT_MODEL` / `JUDGE_MODEL` | see `.env` | Which model handles each stage |
 
-`MAX_ATTEMPTS` is the total number of attempts, not the number of retries. `3` means one initial draft and at most two revisions.
+`MAX_ATTEMPTS` is the total number of attempts, not the number of retries. `3` means one first draft and at most two fixes.
 
 ---
 
-## Tests and verification
+## Testing
 
 ```bash
 pytest -q
 ```
 
-66 tests. Model calls are mocked; no API keys required.
+66 tests. Model calls are mocked, so no API keys are required.
 
 End-to-end checklist for a live environment:
 
-1. RAG lesson passes and thumbs-up persists.
+1. A RAG lesson passes and a thumbs-up persists.
 2. Related memory is retrieved; unrelated memory is not.
 3. Follow-up chat answers only from a shipped lesson.
-4. Deliberate-error injection recovers on the next attempt.
-5. Invalid search credentials fall back without shipping ungrounded content.
+4. Deliberate error injection recovers on the next attempt.
+5. Invalid search credentials fall back without shipping unsupported content.
 6. Postgres-down still generates and evaluates.
 7. Empty or nonsense topics are rejected before a model call.
 
-Do not treat a mocked test or a healthcheck failure as an end-to-end PASS.
+A mocked test or a failed healthcheck is not an end-to-end PASS.
 
-### Threshold calibration
+### Calibrating the memory threshold
 
 ```bash
 python scripts/calibrate_threshold.py
 ```
 
-Computes precision and recall from real embeddings against `data/threshold_pairs.json`. Review the labeled pairs before changing the threshold.
+This computes precision and recall from real embeddings against `data/threshold_pairs.json`. Review the labeled pairs before changing the threshold.
 
 ---
 
-## Observability
+## Logs and debugging
 
 Every provider request records:
 
-- stage, model, graph attempt, provider attempt
-- latency, token usage, finish reason, HTTP status
+- stage, model, graph attempt, and provider attempt
+- latency, token usage, finish reason, and HTTP status
 - classified error
 
-Run events append to `logs/run_<id>.jsonl` even when Postgres is unavailable. The rejection log adds failed check IDs, reasons, source excerpts, revised sections, and a unified diff.
+Run events append to `logs/run_<id>.jsonl` even when Postgres is unavailable. The rejection log adds failed check IDs, reasons, source excerpts, revised sections, and a diff.
 
 If `JUDGE_MODEL` resolves to the same model as `DRAFT_MODEL`, the UI and run log warn that the review is not independent. That warning is deliberate: a self-grading system is a weaker signal, and the pipeline says so.
 
 ---
 
-## Repository layout
-
-```
-src/
-  graph.py            LangGraph wiring, retry router, scorecard
-  schemas.py          Typed state and result contracts
-  nodes/
-    search.py         Cache → Tavily → DDGS → offline stub
-    plan.py           Topic normalization, outline, topic hints
-    generate.py       Drafting, targeted revision, format repair
-    eval_native.py    10 deterministic gates
-    eval_judge.py     5 LLM gates, evidence validation, fail-closed
-  memory.py           Profile-scoped lessons and migration
-  db.py               Postgres/pgvector with self-healing fallback
-  llm.py              Provider wrapper, retries, audit hooks
-prompts/              plan.md, generate.md, judge.md
-rubric.yaml           Native check policy
-jargon.yaml           Terms that must be defined on first use
-data/topic_hints/     Domain facts loaded only for matching topics
-scripts/              healthcheck, run_lesson, calibrate_threshold
-tests/                66 mocked tests
-docs/architecture.md  Node flow and state boundaries
-```
-
----
-
 ## Reliability: what heals, what stops
 
-**What happens when things break?** The pipeline degrades in only two directions: it falls back to a weaker component, or it stops. It never guesses.
+**What happens when things break?** The pipeline does one of two things: it falls back to a weaker component, or it stops. It never guesses.
 
-| Failure | Detection | Automatic response | Invariant |
-| --- | --- | --- | --- |
-| Postgres unreachable | Pool acquisition fails | Disable the pool, use local JSON/JSONL, re-probe every `DB_RETRY_SECONDS` (30s) | Generation and evaluation keep working |
-| Postgres driver missing | Import error at startup | Same local fallback; slower 60s re-probe | A missing dependency is not a crash |
-| Search backend down | Empty result or provider error | Advance caches → Tavily → DDGS → offline stub (6 stages) | The stub cannot pass `NATIVE_SOURCE_GROUNDING` |
-| Provider timeout or rate limit | Classified HTTP/timeout error | Retry the call once with backoff, then raise a typed error | A partial draft is never evaluated or shipped |
-| Malformed model JSON | Schema validation fails | One lightweight repair call, then a typed failure | Bad output cannot enter business logic |
-| Judge evidence not verbatim | Substring check fails | One repair call; if still wrong, mark judge error and stop | A verdict without proof is discarded |
-| Judge omits a check | Result set incomplete | Treat it as an evaluator error, not lesson feedback | Missing evidence never triggers a content rewrite |
-| Revision drops a section | `NATIVE_REQUIRED_SECTIONS` fails | Send the missing headings back, bounded by `MAX_ATTEMPTS=3` | A retry cannot silently shrink the lesson |
-| Embedding service unavailable | No vector returned | Skip semantic memory for this run, continue with profile memory | Memory is an optimization, not a dependency |
-| Draft and judge share a model | Model ID comparison | UI and run log warn that review is not independent | Self-grading is disclosed, never hidden |
+| If this fails | What the pipeline does | What it will never do |
+| --- | --- | --- |
+| Postgres is unreachable | Disables the pool, uses local JSON/JSONL, re-tests every `DB_RETRY_SECONDS` (30s) | Stop generating or evaluating |
+| Postgres driver is missing | Uses the same local fallback; re-tests every 60s | Crash on a missing dependency |
+| A search backend is down | Tries caches → Tavily → DDGS → offline stub (6 stages) | Let the stub pass `NATIVE_SOURCE_GROUNDING` |
+| A model times out or is rate-limited | Retries once with backoff, then raises a typed error | Evaluate or ship a partial draft |
+| A model returns malformed JSON | Makes one lightweight repair call, then raises a typed failure | Let bad output reach business logic |
+| Reviewer evidence is not exact | Makes one repair call; if still wrong, marks a judge error and stops | Accept a verdict without proof |
+| The reviewer omits a check | Treats it as an evaluator error, not lesson feedback | Trigger a content rewrite on missing evidence |
+| A revision drops a section | Sends the missing headings back, within `MAX_ATTEMPTS=3` | Silently ship a shorter lesson |
+| The embedding service is down | Skips semantic memory for this run and uses profile memory | Treat memory as a hard dependency |
+| Draft and reviewer share a model | Warns in the UI and the run log | Hide that the review is not independent |
 
 ---
 
 ## Limits
 
-- A shared draft and judge model is not an independent review. The code warns; it cannot manufacture a second model.
+- A shared draft and review model is not an independent review. The code warns; it cannot create a second model.
 - The free endpoint may rate-limit or change availability. Provider failures are reported, and incomplete drafts are never evaluated.
 - Local JSON fallback is single-process storage. Production needs transactional Postgres and managed quotas.
-- When every search backend fails, the offline stub is allowed to draft but `NATIVE_SOURCE_GROUNDING` fails closed. No ungrounded run can pass.
-- The judge is probabilistic. Verbatim-evidence validation and conservative missing-check handling reduce the blast radius; they do not make it deterministic.
+- When every search backend fails, the offline stub may draft, but `NATIVE_SOURCE_GROUNDING` fails closed. No unsupported run can pass.
+- The AI reviewer is not fully predictable. Exact-quote validation and conservative handling of missing checks limit the damage; they do not make it deterministic.
 
 ---
 
 ## The point
 
-Quality is not a prompt. It is a pipeline with gates, evidence, bounded retries, and a refusal to ship when the system cannot prove the lesson is good.
+Quality is not a prompt. It is a pipeline with checks, evidence, bounded retries, and a refusal to ship when the system cannot prove the lesson is good.
 
 That is the difference between a demo and something you can put in front of a learner.
