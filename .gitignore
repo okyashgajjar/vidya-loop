@@ -43,3 +43,6 @@ Thumbs.db
 
 # Local environment overrides
 .streamlit/secrets.toml
+
+.mycli/
+.mycli-fts/
