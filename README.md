@@ -2,7 +2,7 @@
 
 **Most AI lesson generators ship the first draft. This one refuses to.**
 
-Vidya Loop writes a beginner lesson, checks it against **15 pass/fail rules**, fixes only what failed, and ships it only when every rule passes. If a checker cannot prove its answer, the run stops instead of guessing.
+Vidya Loop writes a beginner lesson. It checks the lesson against **15 pass/fail rules**. It fixes only what failed. It ships only when every rule passes. If a checker cannot prove its answer, the run stops instead of guessing.
 
 ---
 
@@ -10,9 +10,9 @@ Vidya Loop writes a beginner lesson, checks it against **15 pass/fail rules**, f
 
 ### What it is
 
-Vidya Loop is a self-evaluating lesson generator. It searches for real sources, plans the lesson, writes a draft, tests it, repairs the failed parts, and only then shows it to a learner.
+Vidya Loop is a self-evaluating lesson generator. It searches for real sources and plans the lesson. Then it writes a draft, tests it, and repairs the failed parts. Only then does a learner see the lesson.
 
-The default learner is a 12th-grade graduate from India with limited English and a non-English-medium background. The pipeline is topic-agnostic: RAG, linear algebra, and UPI all use the same rules.
+The default learner is a 12th-grade graduate from India. This learner has limited English and a non-English-medium background. The pipeline is topic-agnostic: RAG, linear algebra, and UPI all use the same rules.
 
 ### The problem
 
@@ -68,11 +68,11 @@ flowchart TD
 
 In plain English:
 
-1. **Find real sources.** The app searches its three cache layers, then Tavily, then DuckDuckGo, then an offline stub.
+1. **Find real sources.** The app tries its three cache layers first. Then it tries Tavily, DuckDuckGo, and an offline stub.
 2. **Plan before writing.** The plan lists the sections and the key points the lesson must cover.
 3. **Draft the lesson.** A model writes the first version.
-4. **Run the free checks.** Ten Python checks catch mechanical problems with no AI call and no cost.
-5. **Run the AI reviewer.** Only if the free checks pass, a second model judges meaning, accuracy, and audience fit.
+4. **Run the free checks.** Ten Python checks catch mechanical problems. They use no AI call and cost nothing.
+5. **Run the AI reviewer.** This step runs only if the free checks pass. A second model then judges meaning, accuracy, and audience fit.
 6. **Fix only what failed.** The failed sections are rewritten, not the whole lesson.
 7. **Ship or stop.** Three attempts maximum, then the run fails visibly.
 
@@ -104,22 +104,22 @@ Level 1 is free and runs first. Level 2 costs one AI call and runs only after le
 | 2 | `JUDGE_KEY_POINTS_COVERAGE` | Every planned key point is present by meaning | 1 AI call |
 | 2 | `JUDGE_COHERENT_FLOW` | Introduction → explanation → takeaway | 1 AI call |
 
-All five level-2 checks come back in one structured response, so reaching level 2 costs one AI call, not five.
+All five level-2 checks come back in one structured response. Reaching level 2 costs one AI call, not five.
 
 ### Why it stops instead of guessing
 
-The pipeline is **fail-closed**: when it cannot prove a lesson is good, it does not ship.
+The pipeline is **fail-closed**. When it cannot prove a lesson is good, it does not ship.
 
 - Every quoted piece of evidence must appear word-for-word in the lesson or a source.
 - Every accuracy failure must quote a real source line.
-- One repair call is allowed. If the quote still does not match, the result is a **judge error**, not a lesson failure, and the run stops.
+- One repair call is allowed. If the quote still does not match, the result is a **judge error**. It is not a lesson failure, and the run stops.
 - A missing review check is treated as an evaluator error. The retry logic never mistakes it for lesson feedback.
 
 A reviewer that cannot prove its verdict does not get a vote.
 
 ### What happens when a lesson fails
 
-**How does it regenerate, and what is logged?** This is the common case: the draft is structurally fine but one term is undefined. The run never reaches the AI reviewer, and the retry rewrites only what failed.
+**How does it regenerate, and what is logged?** This is the common case. The draft is structurally fine, but one term is undefined. The run never reaches the AI reviewer, and the retry rewrites only what failed.
 
 ```mermaid
 sequenceDiagram
@@ -139,7 +139,7 @@ sequenceDiagram
     P->>P: send to AI reviewer
 ```
 
-The pipeline keeps a **rejection log**: one structured entry for every retry, written before the next draft starts.
+The pipeline keeps a **rejection log**. It writes one structured entry for every retry, before the next draft starts.
 
 | Field | What it holds | Why it matters |
 | --- | --- | --- |
@@ -150,11 +150,11 @@ The pipeline keeps a **rejection log**: one structured entry for every retry, wr
 | `source_evidence` | Up to three source excerpts | Shows what the model was allowed to claim |
 | `revision_diff` | Diff of the draft before and after the retry | Proves what actually changed |
 
-The same entry feeds short-term memory, so the next attempt starts from what failed. The Streamlit rejection tab shows these entries beside the scorecard, so a reviewer can read the failure without opening a log file.
+The same entry feeds short-term memory. So the next attempt starts from what failed. The Streamlit rejection tab shows these entries beside the scorecard. A reviewer can read the failure without opening a log file.
 
 ### Memory: how it improves over time
 
-**How does it learn across runs?** Memory is not a chat history. It is a small, scoped store: read before drafting, updated when a check fails, and promoted only after a human approves.
+**How does it learn across runs?** Memory is not a chat history. It is a small, scoped store. It is read before drafting and updated when a check fails. It is promoted only after a human approves.
 
 ```mermaid
 flowchart LR
@@ -175,7 +175,7 @@ flowchart LR
 Three rules keep memory from becoming noise:
 
 1. **Style failures go everywhere; content failures stay put.** A readability failure on RAG teaches the next lesson on UPI. A wrong UPI fact does not contaminate a tensor lesson.
-2. **Only relevant memory is loaded.** Memory is injected only above a meaning-similarity score of `0.60`, capped at 10 glossary terms and 3 failure notes.
+2. **Only relevant memory is loaded.** Memory is injected only above a meaning-similarity score of `0.60`. It is capped at 10 glossary terms and 3 failure notes.
 3. **Only approved lessons donate glossary terms.** A thumbs-up promotes the lesson and up to two glossary terms. A thumbs-down records a short reason and teaches nothing.
 
 Failures teach immediately; successes must be approved. Bad lessons cannot teach the system; good ones can.
@@ -365,7 +365,7 @@ Set `DATABASE_URL` in `.env`. Compose applies `db/schema.sql` on a fresh volume.
 python scripts/healthcheck.py
 ```
 
-This prints a separate PASS/FAIL for one model request, one Tavily request, one embedding request, and a Postgres write/read.
+This prints a separate PASS/FAIL for four things. It checks one model request, one Tavily request, one embedding request, and one Postgres write/read.
 
 ---
 
@@ -385,7 +385,7 @@ python scripts/run_lesson.py "Introduction to RAG" --inject-error factual_jargon
 python scripts/run_lesson.py "Introduction to RAG" --inject-error paraphrased_falsehood
 ```
 
-`factual_jargon` proves the free checks catch a known false claim and an undefined term. `paraphrased_falsehood` proves the AI reviewer catches a reworded falsehood that exact-string matching cannot.
+`factual_jargon` proves two things. The free checks catch a known false claim and an undefined term. `paraphrased_falsehood` proves the AI reviewer catches a reworded falsehood. Exact-string matching would miss that one.
 
 ---
 
@@ -444,13 +444,13 @@ Every provider request records:
 
 Run events append to `logs/run_<id>.jsonl` even when Postgres is unavailable. The rejection log adds failed check IDs, reasons, source excerpts, revised sections, and a diff.
 
-If `JUDGE_MODEL` resolves to the same model as `DRAFT_MODEL`, the UI and run log warn that the review is not independent. That warning is deliberate: a self-grading system is a weaker signal, and the pipeline says so.
+If `JUDGE_MODEL` matches `DRAFT_MODEL`, the review is not independent. The UI and run log warn about this. That warning is deliberate. A self-grading system is a weaker signal, and the pipeline says so.
 
 ---
 
 ## Reliability: what heals, what stops
 
-**What happens when things break?** The pipeline does one of two things: it falls back to a weaker component, or it stops. It never guesses.
+**What happens when things break?** The pipeline does one of two things. It falls back to a weaker component, or it stops. It never guesses.
 
 | If this fails | What the pipeline does | What it will never do |
 | --- | --- | --- |
@@ -472,13 +472,13 @@ If `JUDGE_MODEL` resolves to the same model as `DRAFT_MODEL`, the UI and run log
 - A shared draft and review model is not an independent review. The code warns; it cannot create a second model.
 - The free endpoint may rate-limit or change availability. Provider failures are reported, and incomplete drafts are never evaluated.
 - Local JSON fallback is single-process storage. Production needs transactional Postgres and managed quotas.
-- When every search backend fails, the offline stub may draft, but `NATIVE_SOURCE_GROUNDING` fails closed. No unsupported run can pass.
-- The AI reviewer is not fully predictable. Exact-quote validation and conservative handling of missing checks limit the damage; they do not make it deterministic.
+- When every search backend fails, the offline stub may draft. But `NATIVE_SOURCE_GROUNDING` then fails closed. No unsupported run can pass.
+- The AI reviewer is not fully predictable. Exact-quote validation limits the damage. So does conservative handling of missing checks. Neither makes the reviewer deterministic.
 
 ---
 
 ## The point
 
-Quality is not a prompt. It is a pipeline with checks, evidence, bounded retries, and a refusal to ship when the system cannot prove the lesson is good.
+Quality is not a prompt. It is a pipeline with checks, evidence, and bounded retries. It refuses to ship when it cannot prove the lesson is good.
 
 That is the difference between a demo and something you can put in front of a learner.
